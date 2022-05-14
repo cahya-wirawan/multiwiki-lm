@@ -43,11 +43,17 @@ while getopts 'l:o:d:w:hrs:' option; do
        ;;
     o) order=$OPTARG
        ;;
-    l) language=$OPTARG
+    l) IFS=',' read -r -a languages <<< $OPTARG
+
+       for lang in "${languages[@]}"
+       do
+           echo "Language $lang"
+       done
+
        ;;
     d) data_structure=$OPTARG
        ;;
-    w) top_words=$OPTARG
+    w) IFS=',' read -r -a top_words <<< $OPTARG
        ;;
     t) target_dir=$OPTARG
        ;;
@@ -96,13 +102,17 @@ recreate_vocab=$?
 # STEP 1: Download the Wikipedia dump in the given language if necessary
 # For a some statistics of Wikipedias see https://meta.wikimedia.org/wiki/List_of_Wikipedias
 # #################################
-download_url="http://download.wikimedia.org/${language}wiki/latest/${language}wiki-latest-pages-articles.xml.bz2"
-target_file=${tmp_dir}/$(basename ${download_url})  # get corpus file name from url and corpus name
-if [ ! -f ${target_file} ]; then
-    echo "downloading corpus ${corpus_name} from ${download_url} and saving in ${target_file}"
-    echo "This can take up to an hour (Wiki servers are slow). Have lunch or something..."
-    wget -O ${target_file} ${download_url}
-fi
+for language in "${languages[@]}"
+do
+    download_url="http://download.wikimedia.org/${language}wiki/latest/${language}wiki-latest-pages-articles.xml.bz2"
+    target_file=${tmp_dir}/$(basename ${download_url})  # get corpus file name from url and corpus name
+    if [ ! -f ${target_file} ]; then
+        corpus_name="wiki_${language}"
+        echo "downloading corpus ${corpus_name} from ${download_url} and saving in ${target_file}"
+        echo "This can take up to an hour (Wiki servers are slow). Have lunch or something..."
+        wget -O ${target_file} ${download_url}
+    fi
+done
 
 # #################################
 # STEP 2: Create corpus from dump if necessary
