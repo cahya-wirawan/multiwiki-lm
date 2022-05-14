@@ -10,7 +10,7 @@ from unidecode import Cache, _warn_if_not_unicode
 
 
 def main():
-    LANGUAGES = {'de': 'german', 'en': 'english'}
+    LANGUAGES = {'de': 'german', 'en': 'english', 'su': 'english', 'jv': 'english', 'id': 'indonesian'}
     lang = LANGUAGES[sys.argv[1]]
     for line in sys.stdin:
         for sentence in process_line(line, language=lang):
@@ -62,6 +62,7 @@ def unidecode_keep_umlauts(text):
     try:
         bytestring = text.encode('ASCII')
     except UnicodeEncodeError:
+        # print("############### Wrong ascii", text)
         return _unidecode_keep_umlauts(text)
     if version_info[0] >= 3:
         return text
@@ -72,6 +73,7 @@ def unidecode_keep_umlauts(text):
 def _unidecode_keep_umlauts(text):
     # modified version from unidecode._unidecode that keeps umlauts
     retval = []
+    # print("### umlaut:", text)
 
     for char in text:
         codepoint = ord(char)
@@ -104,9 +106,14 @@ def _unidecode_keep_umlauts(text):
             Cache[section] = table = mod.data
 
         if table and len(table) > position:
-            retval.append(table[position])
-
-    return ''.join(retval)
+            if table[position]:
+                retval.append(table[position])
+    try:
+        #print("### return", retval)
+        return ''.join(retval)
+    except TypeError:
+        print("### retval", text, retval)
+        exit(1)
 
 
 def check_lm(lm_path, vocab_path, sentence):

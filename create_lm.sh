@@ -30,13 +30,13 @@ The following result files are created and will not be removed:
 
 # Defaults
 order=4
-language='de'
+language='su'
 data_structure=trie
 top_words=500000
 target_dir='./'
 remove_artifacts=false
 
-while getopts ':hs:' option; do
+while getopts 'l:o:d:w:hrs:' option; do
   case "$option" in
     h) echo "$usage"
        exit
@@ -121,6 +121,7 @@ if [ ! -f "${corpus_file}" ] ; then
     echo "All XML tags will be removed. Numeric word tokens will be replaced by the <num> token."
     echo "Non-ASCII characters will be replaced with their closest ASCII equivalent (if possible), but umlauts will be preserved!"
     echo "This will take some time (~4h). Go to sleep or something..."
+    echo "##### clean dir $cleaned_dir"
     result=$(find $cleaned_dir -name '*bz2' -exec bzcat {} \+ \
             | pv \
             | tee >(    sed 's/<[^>]*>//g' \
@@ -133,16 +134,16 @@ if [ ! -f "${corpus_file}" ] ; then
 
     echo "Processed $(cat ${corpus_file} | wc -l) sentences"
     echo "Processed $(cat ${corpus_file} | wc -w) words"
-    echo "Processed $(cat ${corpus_file} | xargs -n1 | sort | uniq -c) unique words"
+    # echo "Processed $(cat ${corpus_file} | xargs -n1 | sort | uniq -c) unique words"
 
-    echo "compressing $corpus_file. File size before:"
-    du -h ${corpus_file}
-    bzip2 ${corpus_file}
-    echo "done! Compressed file size:"
-    du -h ${corpus_file}.bz2
+    # echo "compressing $corpus_file. File size before:"
+    # du -h ${corpus_file}
+    # bzip2 ${corpus_file}
+    # echo "done! Compressed file size:"
+    # du -h ${corpus_file}.bz2
 
     # vocabulary must be recreated because corpus might have changed
-    recreate_vocab = 1
+    recreate_vocab=1
 fi
 
 if [ ${recreate_vocab} = 1 ] ; then
@@ -180,7 +181,7 @@ fi
 if [ ! -f $lm_arpa ]; then
     echo "Training $order-gram KenLM model with data from $corpus_file.bz2 and saving ARPA file to $lm_arpa"
     echo "This can take several hours, depending on the order of the model"
-    lmplz -o ${order} -T ${tmp_dir} -S 40%  --limit_vocab_file ${lm_vocab} <${corpus_file}.bz2
+    lmplz -o ${order} -T ${tmp_dir} -S 40%  --limit_vocab_file ${lm_vocab} <${corpus_file} > $lm_arpa
 fi
 
 if [ ! -f $lm_binary ]; then
