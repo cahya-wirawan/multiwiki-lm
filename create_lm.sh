@@ -74,17 +74,10 @@ shift $((OPTIND - 1))
 # #################################
 # Paths and filenames
 # #################################
-corpus_name="wiki_${language}"
-lm_basename="${corpus_name}_${order}_gram"
 tmp_dir="${target_dir}/tmp"  # directory for intermediate artifacts
+lm_arpa="${tmp_dir}/lm_combined.arpa" # ARPA file
+lm_binary="${target_dir}/lm_combined.klm" # KenLM binary file (this is the result of the script)
 
-cleaned_dir="${tmp_dir}/${corpus_name}_clean" # directory for WikiExtractor
-corpus_file="${tmp_dir}/${corpus_name}.txt" # uncompressed corpus
-lm_counts="${tmp_dir}/${corpus_name}.counts" # corpus vocabulary with counts (all words)
-lm_vocab="${tmp_dir}/${corpus_name}.vocab" # corpus vocabulary used for training (most frequent words)
-lm_arpa="${tmp_dir}/${lm_basename}.arpa" # ARPA file
-
-lm_binary="${target_dir}/${lm_basename}.klm" # KenLM binary file (this is the result of the script)
 
 # create target directories if the don't exist yet
 mkdir -p $target_dir
@@ -127,7 +120,6 @@ do
     corpus_file="${tmp_dir}/${corpus_name}.txt" # uncompressed corpus
     lm_counts="${tmp_dir}/${corpus_name}.counts" # corpus vocabulary with counts (all words)
     lm_vocab="${tmp_dir}/${corpus_name}.vocab" # corpus vocabulary used for training (most frequent words)
-    lm_arpa="${tmp_dir}/${lm_basename}.arpa" # ARPA file
     target_file="${tmp_dir}/${language}wiki-latest-pages-articles.xml.bz2"  # get corpus file name from url and corpus name
     recreate_vocab=0
 
