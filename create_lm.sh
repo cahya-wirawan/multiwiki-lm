@@ -118,80 +118,105 @@ done
 # STEP 2: Create corpus from dump if necessary
 # Use WikExtractor (see https://github.com/attardi/wikiextractor for details)
 # #################################
-if [ ! -f "${corpus_file}" ] ; then
-    if [ ! -d $cleaned_dir ] ; then
-        echo "Extracting/cleaning text from Wikipedia data base dump at ${target_file} using WikiExtractor."
-        echo "Cleaned articles are saved to ${cleaned_dir}"
-        echo "This will take 2-3 hours. Have a walk or something..."
-        mkdir -p ${cleaned_dir}
-        python3 ./WikiExtractor.py -c -b 25M -o ${cleaned_dir} ${target_file}
+for index in "${!languages[@]}"
+do
+    language=${languages[$index]}
+    corpus_name="wiki_${language}"
+    tmp_dir="${target_dir}/tmp"  # directory for intermediate artifacts
+    cleaned_dir="${tmp_dir}/${corpus_name}_clean" # directory for WikiExtractor
+    corpus_file="${tmp_dir}/${corpus_name}.txt" # uncompressed corpus
+    lm_counts="${tmp_dir}/${corpus_name}.counts" # corpus vocabulary with counts (all words)
+    lm_vocab="${tmp_dir}/${corpus_name}.vocab" # corpus vocabulary used for training (most frequent words)
+    lm_arpa="${tmp_dir}/${lm_basename}.arpa" # ARPA file
+    target_file="${tmp_dir}/${latest/${language}wiki-latest-pages-articles.xml.bz2}"  # get corpus file name from url and corpus name
+    recreate_vocab=0
+
+    if [ ! -f "${corpus_file}" ] ; then
+        if [ ! -d $cleaned_dir ] ; then
+            echo "Extracting/cleaning text from Wikipedia data base dump at ${target_file} using WikiExtractor."
+            echo "Cleaned articles are saved to ${cleaned_dir}"
+            echo "This will take 2-3 hours. Have a walk or something..."
+            mkdir -p ${cleaned_dir}
+            python3 ./WikiExtractor.py -c -b 25M -o ${cleaned_dir} ${target_file}
+        fi
+        echo "Uncompressing and preprocessing cleaned articles from $cleaned_dir"
+        echo "All articles will be written to $corpus_file (1 sentence per line, without dot at the end)."
+        echo "All XML tags will be removed. Numeric word tokens will be replaced by the <num> token."
+        echo "Non-ASCII characters will be replaced with their closest ASCII equivalent (if possible), but umlauts will be preserved!"
+        echo "This will take some time (~4h). Go to sleep or something..."
+        echo "##### clean dir $cleaned_dir"
+        result=$(find $cleaned_dir -name '*bz2' -exec bzcat {} \+ \
+                | pv \
+                | tee >(    sed 's/<[^>]*>//g' \
+                          | sed 's|["'\''„“‚‘]||g' \
+                          | python3 ./create_corpus.py ${language} > ${corpus_file} \
+                       ) \
+                | grep -e "<doc" \
+                | wc -l)
+        echo "Processed ${result} articles and saved raw text in $corpus_file"
+
+        echo "Processed $(cat ${corpus_file} | wc -l) sentences"
+        echo "Processed $(cat ${corpus_file} | wc -w) words"
+        # echo "Processed $(cat ${corpus_file} | xargs -n1 | sort | uniq -c) unique words"
+
+        # echo "compressing $corpus_file. File size before:"
+        # du -h ${corpus_file}
+        # bzip2 ${corpus_file}
+        # echo "done! Compressed file size:"
+        # du -h ${corpus_file}.bz2
+
+        # vocabulary must be recreated because corpus might have changed
+        recreate_vocab=1
     fi
-    echo "Uncompressing and preprocessing cleaned articles from $cleaned_dir"
-    echo "All articles will be written to $corpus_file (1 sentence per line, without dot at the end)."
-    echo "All XML tags will be removed. Numeric word tokens will be replaced by the <num> token."
-    echo "Non-ASCII characters will be replaced with their closest ASCII equivalent (if possible), but umlauts will be preserved!"
-    echo "This will take some time (~4h). Go to sleep or something..."
-    echo "##### clean dir $cleaned_dir"
-    result=$(find $cleaned_dir -name '*bz2' -exec bzcat {} \+ \
-            | pv \
-            | tee >(    sed 's/<[^>]*>//g' \
-                      | sed 's|["'\''„“‚‘]||g' \
-                      | python3 ./create_corpus.py ${language} > ${corpus_file} \
-                   ) \
-            | grep -e "<doc" \
-            | wc -l)
-    echo "Processed ${result} articles and saved raw text in $corpus_file"
 
-    echo "Processed $(cat ${corpus_file} | wc -l) sentences"
-    echo "Processed $(cat ${corpus_file} | wc -w) words"
-    # echo "Processed $(cat ${corpus_file} | xargs -n1 | sort | uniq -c) unique words"
+    if [ ${recreate_vocab} = 1 ] ; then
+        echo "(re-)creating vocabulary of $corpus_file and saving it in $lm_vocab. "
+        echo "This usually takes around half an hour. Get a coffee or something..."
 
-    # echo "compressing $corpus_file. File size before:"
-    # du -h ${corpus_file}
-    # bzip2 ${corpus_file}
-    # echo "done! Compressed file size:"
-    # du -h ${corpus_file}.bz2
+        echo "counting word occurrences..."
+        cat ${corpus_file} |
+            pv -s "$(stat --printf='%s' ${corpus_file})" | # show progress bar
+            tr '[:space:]' '[\n*]' | # replace space with newline (one word per line)
+            grep -v "^\s*$" | # remove empty lines
+            grep -v '#' | # remove words with numbers
+            awk 'length($0)>1' | # remove words with length 1
+            sort | uniq -c | sort -bnr > ${lm_counts} # sort alphanumeric, count unique words, then sort result
 
-    # vocabulary must be recreated because corpus might have changed
-    recreate_vocab=1
-fi
+        total_sum=$(cat ${lm_counts} |
+                tr -d ' [:alpha:]äöü<>\177' | # remove non-numeric characters (everything but the counts)
+                paste -sd+ | # concatenate with '+'
+                bc) # sum up
+        top_sum=$(cat ${lm_counts} |
+                head -${top_words[$index]} | # limit to first $top_words entries here
+                tr -d ' [:alpha:]äöü<>\177' | # same as above
+                paste -sd+ | bc) # same as above
+        fraction=$(echo "scale=2 ; 100 * $top_sum / $total_sum" | bc)
+        echo "Top ${top_words[$index]} words make up $fraction% of words"
 
-if [ ${recreate_vocab} = 1 ] ; then
-    echo "(re-)creating vocabulary of $corpus_file and saving it in $lm_vocab. "
-    echo "This usually takes around half an hour. Get a coffee or something..."
+    fi
+done
 
-    echo "counting word occurrences..."
-    cat ${corpus_file} |
-        pv -s $(stat --printf="%s" ${corpus_file}) | # show progress bar
-        tr '[:space:]' '[\n*]' | # replace space with newline (one word per line)
-        grep -v "^\s*$" | # remove empty lines
-        grep -v '#' | # remove words with numbers
-        awk 'length($0)>1' | # remove words with length 1
-        sort | uniq -c | sort -bnr > ${lm_counts} # sort alphanumeric, count unique words, then sort result
+lm_vocab_tmp="${tmp_dir}/wiki_tmp.vocab" # corpus vocabulary used for training (most frequent words)
+lm_vocab_combined="${tmp_dir}/wiki_combined.vocab" # combined vocabulary
+for index in "${!languages[@]}"
+do
+    language=${languages[$index]}
+    corpus_name="wiki_${language}"
+    lm_counts="${tmp_dir}/${corpus_name}.counts" # corpus vocabulary with counts (all words)
 
-    echo "...done! writing $top_words top words to vocabulary"
+    echo "...done! writing ${top_words[$index]} top words to vocabulary"
     cat ${lm_counts} |
         tr -d '[:digit:] ' | # remove counts from lines
-        head -${top_words} | # keep $top_words words
-        tr '\n' ' ' > ${lm_vocab} # replace newline with spaces (expected input format for KenLM)
+        head -${top_words[$index]} >> ${lm_vocab_tmp} # write top words to vocabulary
+done
 
-    total_sum=$(cat ${lm_counts} |
-            tr -d ' [:alpha:]äöü<>\177' | # remove non-numeric characters (everything but the counts)
-            paste -sd+ | # concatenate with '+'
-            bc) # sum up
-    top_sum=$(cat ${lm_counts} |
-            head -${top_words} | # limit to first $top_words entries here
-            tr -d ' [:alpha:]äöü<>\177' | # same as above
-            paste -sd+ | bc) # same as above
-    fraction=$(echo "scale=2 ; 100 * $top_sum / $total_sum" | bc)
-    echo "Top $top_words words make up $fraction% of words"
-fi
-
+sort -u ${lm_vocab_tmp} | tr '\n' ' ' > ${lm_vocab_combined} # remove duplicates and save it in a line
 
 if [ ! -f $lm_arpa ]; then
     echo "Training $order-gram KenLM model with data from $corpus_file.bz2 and saving ARPA file to $lm_arpa"
     echo "This can take several hours, depending on the order of the model"
-    lmplz -o ${order} -T ${tmp_dir} -S 40%  --limit_vocab_file ${lm_vocab} <${corpus_file} > $lm_arpa
+    for language in "${languages[@]}"; do cat "${tmp_dir}/wiki_${language}.txt"; done | \
+        lmplz -o ${order} -T ${tmp_dir} -S 40%  --limit_vocab_file ${lm_vocab_combined} > $lm_arpa
 fi
 
 if [ ! -f $lm_binary ]; then
