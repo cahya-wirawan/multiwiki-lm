@@ -10,7 +10,7 @@ from unidecode import Cache, _warn_if_not_unicode
 
 
 def main():
-    LANGUAGES = {'de': 'german', 'en': 'english', 'su': 'english', 'jv': 'english', 'id': 'indonesian'}
+    LANGUAGES = {'de': 'german', 'en': 'english', 'su': 'english', 'jv': 'english', 'id': 'english'}
     lang = LANGUAGES[sys.argv[1]]
     for line in sys.stdin:
         for sentence in process_line(line, language=lang):
