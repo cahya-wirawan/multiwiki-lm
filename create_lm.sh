@@ -128,7 +128,7 @@ do
     lm_counts="${tmp_dir}/${corpus_name}.counts" # corpus vocabulary with counts (all words)
     lm_vocab="${tmp_dir}/${corpus_name}.vocab" # corpus vocabulary used for training (most frequent words)
     lm_arpa="${tmp_dir}/${lm_basename}.arpa" # ARPA file
-    target_file="${tmp_dir}/${language}wiki-latest-pages-articles.xml.bz2}"  # get corpus file name from url and corpus name
+    target_file="${tmp_dir}/${language}wiki-latest-pages-articles.xml.bz2"  # get corpus file name from url and corpus name
     recreate_vocab=0
 
     if [ ! -f "${corpus_file}" ] ; then
